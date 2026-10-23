@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.1
+
+- Seitenleiste zeigt je Gerät die aktuellen Messwerte: Kurzfassung (Leistung,
+  Spannung, Energie bzw. Eingänge/Relais) in der Liste und alle Werte per
+  „Werte“ aufklappbar – zum Zuordnen beim Benennen.
+
 ## 0.3.0
 
 - Weboberfläche in der HA-Seitenleiste (Ingress): gefundene Geräte mit Typ,

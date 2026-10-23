@@ -1,5 +1,5 @@
 name: Husemann2MQTT
-version: "0.3.0"
+version: "0.3.1"
 slug: husemann2mqtt
 description: >-
   Liest ein Husemann Smart Panel (Tixi.Gate-Datenlogger) über die TiXML-HTTP-API

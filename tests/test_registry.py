@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 
-from app.registry import Defaults, Registry, device_key
+from app.registry import Defaults, Registry, describe_values, device_key, format_value, summarize
 
 
 def test_defaults_filter_and_names():
@@ -84,8 +84,32 @@ def test_snapshot_and_gateway_status(tmp_path, d11):
     assert snap["gateways"][0]["online"] and snap["gateways"][0]["last_ok"] > 0
     dev = snap["devices"][0]
     assert dev["key"] == "gateway_1/d11" and dev["point_count"] == 3 and dev["display_name"].startswith("EM330")
+    assert dev["summary"] == "P -35 kW"
+    assert {v["point"]: v["value"] for v in dev["values"]} == {"RealPower_L1_N": "-35 kW", "DeviceState": "an",
+                                                               "SerialNo": "123456"}
     reg.observe_devices("Gateway 1", {})                     # Gerät verschwunden
     assert reg.snapshot()["devices"][0]["online"] is False
+
+
+def test_value_formatting():
+    assert format_value("RealPower_L1_N", "-35.215") == "-35.22 kW"
+    assert format_value("RealEnergy_L1L2L3Con", "12345.6") == "12346 kWh"
+    assert format_value("Input01", "1") == "an" and format_value("SetRelais02", "0") == "aus"
+    assert format_value("SerialNo", "AX1001") == "AX1001"
+    assert format_value("CosPhi_UL1_IL1", "0.980") == "0.98"
+
+
+def test_summary_and_details():
+    meter = {"SerialNo": "1", "DeviceState": "1", "Voltage_L1_N": "232.4", "RealPowerPSum_P1P2P3": "-35.2",
+             "RealPower_L1_N": "-12.0", "RealEnergy_L1L2L3Con": "12345.6", "CosPhi_UL1_IL1": "0.98"}
+    assert summarize(meter) == "P -35.2 kW · U 232.4 V · E 12346 kWh"
+    names = [d["name"] for d in describe_values(meter)]
+    assert set(names[:2]) == {"Real Power L1 N", "Real Power PSum P1P2P3"}  # Leistung zuerst
+    assert names[-2:] == ["Device State", "Serial No"]                        # Diagnose zuletzt
+    assert describe_values(meter)[-1]["diagnostic"] is True
+    io = {"Input01": "1", "Input02": "0", "Input03": "1", "SetRelais01": "0", "DeviceState": "1"}
+    assert summarize(io) == "Eingänge an: 1, 3 · Relais an: keine"
+    assert summarize({}) == ""
 
 
 def test_corrupt_file_starts_empty(tmp_path):

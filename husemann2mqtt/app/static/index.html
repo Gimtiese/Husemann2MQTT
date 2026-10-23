@@ -39,7 +39,7 @@
   tr.gw td { background: color-mix(in srgb, var(--accent) 8%, var(--card)); font-weight: 500; }
   td.num { text-align: right; font-variant-numeric: tabular-nums; }
   td.muted, span.muted { color: var(--muted); }
-  input[type=text] { font: inherit; width: 100%; min-width: 160px; padding: 6px 8px; border-radius: 4px;
+  input[type=text] { font: inherit; width: 100%; min-width: 140px; padding: 6px 8px; border-radius: 4px;
                      border: 1px solid var(--line); background: var(--input); color: var(--text); }
   input[type=text]:focus { outline: 2px solid var(--accent); border-color: transparent; }
   input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--accent); }
@@ -48,6 +48,15 @@
   .status.dirty { color: var(--warn); }
   .status.ok { color: var(--ok); }
   .empty { padding: 32px; text-align: center; color: var(--muted); }
+  td.live { color: var(--muted); font-variant-numeric: tabular-nums; }
+  #table { overflow-x: auto; }
+  tr.details td { background: color-mix(in srgb, var(--accent) 4%, var(--card)); padding: 6px 12px 10px 44px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 2px 16px; }
+  .grid div { display: flex; justify-content: space-between; gap: 8px; padding: 2px 0;
+              border-bottom: 1px dotted var(--line); font-variant-numeric: tabular-nums; }
+  .grid div span:first-child { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .grid div.diag { opacity: .6; }
+  button.toggle { white-space: nowrap; }
   @media (max-width: 720px) {
     .hide-sm { display: none; }
     main { padding: 8px; }
@@ -58,7 +67,8 @@
 <main>
   <h1>Husemann2MQTT</h1>
   <p class="lead">Gefundene Geräte der Tixi-Gateways. Haken setzen und Namen vergeben – angehakte Geräte
-    erscheinen innerhalb weniger Sekunden mit diesem Namen in Home Assistant, abgehakte werden entfernt.</p>
+    erscheinen innerhalb weniger Sekunden mit diesem Namen in Home Assistant, abgehakte werden entfernt.
+    „Werte“ zeigt die aktuellen Messwerte eines Geräts, um es beim Benennen zuzuordnen.</p>
 
   <div class="gateways" id="gateways"></div>
 
@@ -80,6 +90,7 @@
   const $ = (id) => document.getElementById(id);
   let snapshot = null;          // letzter Stand vom Server
   let edits = {};               // key -> {name, enabled} (ungespeichert)
+  const expanded = new Set();   // keys mit aufgeklappten Werten
   let saving = false;
 
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) =>
@@ -122,6 +133,12 @@
                           : d.online ? `<span class="dot ok"></span> online`
                           : `<span class="dot warn"></span> keine Antwort am Bus`;
   const forgetCell = (d) => isFound(d) ? "" : `<button class="link" data-forget="${esc(d.key)}">Vergessen</button>`;
+  const actionCell = (d) => `<button class="toggle" data-toggle="${esc(d.key)}">${expanded.has(d.key) ? "▾" : "▸"} Werte</button>
+    ${forgetCell(d)}`;
+  const detailsHtml = (d) => d.values.length
+    ? `<div class="grid">${d.values.map((v) => `<div class="${v.diagnostic ? "diag" : ""}" title="${esc(v.point)}">
+        <span>${esc(v.name)}</span><span>${esc(v.value)}</span></div>`).join("")}</div>`
+    : `<span class="muted">Noch keine Werte empfangen.</span>`;
 
   function renderTable() {
     const devs = snapshot.devices;
@@ -132,7 +149,7 @@
     }
     let html = `<table><thead><tr>
       <th>MQTT</th><th>Knoten</th><th>Typ</th><th class="hide-sm">Seriennr.</th><th>Status</th>
-      <th class="num hide-sm">Werte</th><th class="hide-sm">Gesehen</th><th>Name in Home Assistant</th><th></th>
+      <th class="hide-sm">Aktuell</th><th class="hide-sm">Gesehen</th><th>Name in Home Assistant</th><th></th>
       </tr></thead><tbody>`;
     let gw = null;
     for (const d of devs) {
@@ -147,11 +164,14 @@
         <td>${esc(d.model || "–")}</td>
         <td class="hide-sm muted">${esc(d.serial || "–")}</td>
         <td style="white-space:nowrap" data-c="status">${statusCell(d)}</td>
-        <td class="num hide-sm" data-c="points">${d.point_count}</td>
+        <td class="live hide-sm" data-c="live">${esc(d.summary || "–")}</td>
         <td class="hide-sm muted" data-c="seen">${ago(d.last_seen)}</td>
         <td class="keep"><input type="text" data-f="name" value="${esc(c.name)}" placeholder="${esc(d.default_name)}"></td>
-        <td class="keep" data-c="forget">${forgetCell(d)}</td>
+        <td class="keep" data-c="actions">${actionCell(d)}</td>
       </tr>`;
+      if (expanded.has(d.key)) {
+        html += `<tr class="details" data-for="${esc(d.key)}"><td colspan="9">${detailsHtml(d)}</td></tr>`;
+      }
     }
     $("table").innerHTML = html + "</tbody></table>";
   }
@@ -175,9 +195,11 @@
       const row = document.querySelector(`tr[data-key="${CSS.escape(d.key)}"]`);
       if (!row) { renderTable(); break; }
       row.querySelector('[data-c="status"]').innerHTML = statusCell(d);
-      row.querySelector('[data-c="points"]').textContent = d.point_count;
+      row.querySelector('[data-c="live"]').textContent = d.summary || "–";
       row.querySelector('[data-c="seen"]').textContent = ago(d.last_seen);
-      row.querySelector('[data-c="forget"]').innerHTML = forgetCell(d);
+      row.querySelector('[data-c="actions"]').innerHTML = actionCell(d);
+      const det = document.querySelector(`tr.details[data-for="${CSS.escape(d.key)}"] td`);
+      if (det) det.innerHTML = detailsHtml(d);
     }
     renderStatus();
   }
@@ -218,6 +240,12 @@
     renderStatus();
   });
   $("table").addEventListener("click", async (ev) => {
+    const toggle = ev.target.dataset.toggle;
+    if (toggle) {
+      expanded.has(toggle) ? expanded.delete(toggle) : expanded.add(toggle);
+      renderTable();                       // Eingaben bleiben erhalten: edits werden mitgerendert
+      return;
+    }
     const key = ev.target.dataset.forget; if (!key) return;
     if (!confirm("Gerät aus der Liste und aus Home Assistant entfernen?")) return;
     try { snapshot = await api("api/forget", {key}); delete edits[key]; render(true); }

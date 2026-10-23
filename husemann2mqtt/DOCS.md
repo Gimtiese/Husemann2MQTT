@@ -15,9 +15,12 @@ Nach dem Start erscheint **Husemann2MQTT** in der Seitenleiste von Home
 Assistant. Die Seite zeigt alle gefundenen Geräte je Gateway mit Knoten, Typ,
 Seriennummer, Status und Anzahl der Messwerte.
 
-1. Haken bei den Geräten setzen, die in Home Assistant erscheinen sollen.
-2. Optional einen Namen vergeben (leer = Standardname wie `EM340 D15 (Gateway 1)`).
-3. **Speichern**. Das Add-on legt die Geräte innerhalb weniger Sekunden per
+1. Mit **Werte** die aktuellen Messwerte eines Geräts aufklappen, um es zuzuordnen
+   (die Spalte „Aktuell“ zeigt vorab Leistung, Spannung und Zählerstand bzw. die
+   Schaltzustände der Eingänge). Die Werte aktualisieren sich alle 5 Sekunden.
+2. Haken bei den Geräten setzen, die in Home Assistant erscheinen sollen.
+3. Optional einen Namen vergeben (leer = Standardname wie `EM340 D15 (Gateway 1)`).
+4. **Speichern**. Das Add-on legt die Geräte innerhalb weniger Sekunden per
    MQTT-Discovery an – mit dem vergebenen Namen. Abgehakte Geräte werden samt
    Entitäten aus Home Assistant entfernt.
 

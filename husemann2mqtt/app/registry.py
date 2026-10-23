@@ -17,11 +17,66 @@ import threading
 import time
 from dataclasses import asdict, dataclass, field
 
+from .mapping import meta_for, pretty_name
 from .tixi import Device
 
 _LOGGER = logging.getLogger(__name__)
 
 SCHEMA_VERSION = 1
+
+# Reihenfolge der Messwerte in der Detailansicht: erst das, was beim Zuordnen hilft.
+_POINT_ORDER = ("RealPower", "ApparentPower", "ReactivePower", "Voltage", "Current", "CosPhi",
+                "Frequency", "Energy", "Input", "SetRelais")
+
+
+def _point_rank(point: str) -> tuple[int, str]:
+    for i, prefix in enumerate(_POINT_ORDER):
+        if prefix.lower() in point.lower():
+            return (i, point)
+    return (len(_POINT_ORDER) + (1 if meta_for(point).diagnostic else 0), point)
+
+
+def format_value(point: str, raw: str) -> str:
+    """Rohwert lesbar machen: Einheit anhängen, Schaltzustände als an/aus."""
+    meta = meta_for(point)
+    if meta.component == "binary_sensor":
+        return "aus" if raw in ("0", "0.0", "") else "an"
+    try:
+        val = float(raw)
+    except (TypeError, ValueError):
+        return raw
+    text = f"{val:.2f}".rstrip("0").rstrip(".") if abs(val) < 1000 else f"{val:.0f}"
+    return f"{text} {meta.unit}" if meta.unit else text
+
+
+def describe_values(values: dict[str, str]) -> list[dict]:
+    """Alle Datenpunkte eines Geräts für die Oberfläche, sinnvoll sortiert."""
+    return [
+        {"point": p, "name": pretty_name(p), "value": format_value(p, values[p]),
+         "diagnostic": meta_for(p).diagnostic}
+        for p in sorted(values, key=_point_rank)
+    ]
+
+
+def summarize(values: dict[str, str]) -> str:
+    """Kurzfassung für die Geräteliste, z. B. ``P 35.2 kW · U 232 V · E 12345 kWh``."""
+    parts = []
+    power = next((p for p in ("RealPowerPSum_P1P2P3", "RealPower_L1_N") if p in values), None)
+    if power:
+        parts.append("P " + format_value(power, values[power]))
+    if "Voltage_L1_N" in values:
+        parts.append("U " + format_value("Voltage_L1_N", values["Voltage_L1_N"]))
+    if "RealEnergy_L1L2L3Con" in values:
+        parts.append("E " + format_value("RealEnergy_L1L2L3Con", values["RealEnergy_L1L2L3Con"]))
+    inputs = sorted(p for p in values if p.startswith("Input"))
+    if inputs:
+        on = [p.removeprefix("Input").lstrip("0") for p in inputs if values[p] not in ("0", "0.0")]
+        parts.append(f"Eingänge an: {', '.join(on) if on else 'keine'}")
+    relays = sorted(p for p in values if p.startswith("SetRelais"))
+    if relays:
+        on = [p.removeprefix("SetRelais").lstrip("0") for p in relays if values[p] not in ("0", "0.0")]
+        parts.append(f"Relais an: {', '.join(on) if on else 'keine'}")
+    return " · ".join(parts)
 
 
 def slug(text: str) -> str:
@@ -112,6 +167,7 @@ class Registry:
         self.defaults = defaults or Defaults()
         self._lock = threading.RLock()
         self._entries: dict[str, Entry] = {}
+        self._values: dict[str, dict[str, str]] = {}   # key -> letzte Rohwerte (nur im Speicher)
         self._gateways: dict[str, GatewayStatus] = {}
         self._pending: dict[str, str] = {}          # key -> "republish" | "remove"
         self._removed: dict[str, Entry] = {}        # für "remove" die letzte bekannte Entry
@@ -183,6 +239,7 @@ class Registry:
                 if serial and serial != "0":
                     entry.serial = serial
                 entry.points = sorted(dev.values)
+                self._values[key] = dict(dev.values)
                 entry.last_seen = now
                 entry.online = dev.values.get("DeviceState", "1") not in ("0", "0.0")
                 result.append(entry)
@@ -214,7 +271,9 @@ class Registry:
                 "gateways": [asdict(g) for g in self._gateways.values()],
                 "devices": [
                     {**asdict(e), "key": e.key, "default_name": e.default_name,
-                     "display_name": e.display_name, "point_count": len(e.points)}
+                     "display_name": e.display_name, "point_count": len(e.points),
+                     "summary": summarize(self._values.get(e.key, {})),
+                     "values": describe_values(self._values.get(e.key, {}))}
                     for e in sorted(self._entries.values(), key=lambda e: (e.gateway, _node_order(e.node)))
                 ],
                 "pending": bool(self._pending),
@@ -247,6 +306,7 @@ class Registry:
         """Entfernt ein Gerät samt MQTT-Discovery (z. B. nach Ausbau aus dem Panel)."""
         with self._lock:
             entry = self._entries.pop(key, None)
+            self._values.pop(key, None)
             if entry is None:
                 return False
             self._removed[key] = entry

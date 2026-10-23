@@ -46,6 +46,8 @@ def test_devices_api_roundtrip(server):
     assert status == 200 and ctype.startswith("application/json")
     snap = json.loads(body)
     assert [d["node"] for d in snap["devices"]] == ["D11", "D99"]
+    assert snap["devices"][1]["summary"] == "Eingänge an: 1"
+    assert snap["devices"][0]["values"][0]["value"] == "-35 kW"
     assert snap["gateways"][0]["name"] == "Gateway 1" and snap["pending"] is False
 
     key = device_key("Gateway 1", "D11")

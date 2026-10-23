@@ -69,7 +69,7 @@ Alle Optionen: [`husemann2mqtt/DOCS.md`](husemann2mqtt/DOCS.md).
 
 ## Status
 
-v0.3.0 – liest beliebig viele Gateways, Geräte werden in der Seitenleiste
+v0.3.1 – liest beliebig viele Gateways, Geräte werden in der Seitenleiste
 ausgewählt und benannt, Publikation read-only nach MQTT. Schalten der Relais
 ist bewusst (noch) nicht aktiv.
 
