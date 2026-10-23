@@ -1,0 +1,22 @@
+[project]
+name = "husemann-tui"
+version = "0.1.0"
+description = "Terminal-UI zum Erkunden und Aufzeichnen von Husemann-Smart-Panel-Daten (Tixi.Gate, TiXML)"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+dependencies = [
+    "textual>=0.80",
+    "textual-plotext>=1.0",
+    "requests>=2.31",
+]
+
+[project.scripts]
+husemann-tui = "husemann_tui.cli:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["husemann_tui"]

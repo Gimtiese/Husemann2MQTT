@@ -1,0 +1,65 @@
+name: Husemann2MQTT
+version: "0.2.0"
+slug: husemann2mqtt
+description: >-
+  Liest ein Husemann Smart Panel (Tixi.Gate-Datenlogger) über die TiXML-HTTP-API
+  aus und legt alle Zähler und I/O-Module per MQTT-Discovery in Home Assistant an.
+url: https://github.com/Gimtiese/Husemann2MQTT/tree/main/husemann2mqtt
+arch:
+  - aarch64
+  - amd64
+  - armv7
+  - armhf
+  - i386
+init: false
+startup: application
+boot: auto
+# Holt sich Zugangsdaten eines installierten MQTT-Brokers (z. B. Mosquitto-Add-on)
+# automatisch. Externer Broker bleibt über die Option `mqtt` konfigurierbar.
+services:
+  - mqtt:want
+map:
+  - addon_config:rw
+options:
+  gateways:
+    - name: Gateway 1
+      host: 192.168.0.1
+      port: 8080
+  poll_interval: 10
+  request_timeout: 8
+  base_topic: husemann
+  discovery_prefix: homeassistant
+  include_devices: []
+  exclude_devices: []
+  device_names: []
+  mqtt:
+    host: ""
+    port: 1883
+    username: ""
+    password: ""
+    tls: false
+  log_level: info
+schema:
+  gateways:
+    - name: str
+      host: str
+      port: port
+  poll_interval: int(2,3600)
+  request_timeout: int(1,60)
+  base_topic: str
+  discovery_prefix: str
+  include_devices:
+    - str
+  exclude_devices:
+    - str
+  device_names:
+    - node: str
+      name: str
+      gateway: str?
+  mqtt:
+    host: str?
+    port: port?
+    username: str?
+    password: password?
+    tls: bool?
+  log_level: list(trace|debug|info|notice|warning|error|fatal)
