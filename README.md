@@ -5,9 +5,9 @@ mit SpiderControl-HMI) über die **TiXML-HTTP-API** ausliest und alle Zähler un
 I/O-Module per **MQTT-Discovery** in Home Assistant anlegt.
 
 Keine Modbus-Verkabelung, kein Login nötig: Der Logger stellt die Live-Werte
-aller am Bus konfigurierten Geräte als XML bereit. Das Add-on pollt sie und
-legt automatisch Sensoren an – welche Geräte erscheinen, ergibt sich aus der
-Konfiguration des jeweiligen Panels.
+aller am Bus konfigurierten Geräte als XML bereit. Das Add-on pollt sie, zeigt
+die gefundenen Geräte in der HA-Seitenleiste und legt die ausgewählten mit dem
+vergebenen Namen automatisch als Sensoren an.
 
 ## Installation (über GitHub in Home Assistant OS)
 
@@ -17,6 +17,7 @@ Konfiguration des jeweiligen Panels.
    `https://github.com/Gimtiese/Husemann2MQTT`
 4. Das Add-on **Husemann2MQTT** erscheint im Store → **Installieren**.
 5. Unter **Konfiguration** die Gateways (und ggf. MQTT) einstellen, dann **Starten**.
+6. **Husemann2MQTT** in der Seitenleiste öffnen, Geräte anhaken, Namen vergeben, **Speichern**.
 
 > Voraussetzung: Ein MQTT-Broker in HA (z. B. das **Mosquitto**-Add-on) und die
 > **MQTT-Integration**. Das Add-on nutzt dessen Zugangsdaten automatisch; ein
@@ -51,9 +52,10 @@ gateways:
 poll_interval: 10          # Sekunden
 base_topic: husemann
 discovery_prefix: homeassistant
-include_devices: []        # leer = alle; sonst z. B. ["D11","EM340"]
+auto_enable_new_devices: false   # true = neue Geräte sofort publizieren
+include_devices: []        # Vorgabe für neue Geräte; leer = alle, sonst z. B. ["D11","EM340"]
 exclude_devices: []        # z. B. ["D99"]
-device_names:              # eigene Anzeigenamen in Home Assistant
+device_names:              # Vorgabe-Namen für neue Geräte (Seitenleiste hat Vorrang)
   - node: D11
     name: Hauptzähler
 mqtt:                      # leer lassen, wenn HA-Mosquitto genutzt wird
@@ -67,8 +69,25 @@ Alle Optionen: [`husemann2mqtt/DOCS.md`](husemann2mqtt/DOCS.md).
 
 ## Status
 
-v0.2.0 – liest beliebig viele Gateways, benennt Geräte nach Wunsch und
-publiziert read-only nach MQTT. Schalten der Relais ist bewusst (noch) nicht aktiv.
+v0.3.0 – liest beliebig viele Gateways, Geräte werden in der Seitenleiste
+ausgewählt und benannt, Publikation read-only nach MQTT. Schalten der Relais
+ist bewusst (noch) nicht aktiv.
+
+## Entwicklung
+
+```bash
+python3 -m venv .venv && .venv/bin/pip install -r requirements-dev.txt
+.venv/bin/ruff check . && .venv/bin/pytest
+```
+
+Die Weboberfläche lässt sich ohne Home Assistant testen (eine `options.json`
+nach dem Muster aus `husemann2mqtt/DOCS.md` anlegen, MQTT-Broker eintragen):
+
+```bash
+cd husemann2mqtt
+H2M_OPTIONS=../options.json H2M_REGISTRY=../devices.json H2M_ALLOW_ANY_CLIENT=1 \
+  ../.venv/bin/python -m app.main        # dann http://localhost:8099 öffnen
+```
 
 ## Lizenz
 

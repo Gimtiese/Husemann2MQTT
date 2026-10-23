@@ -9,6 +9,26 @@ Welche Geräte erscheinen, hängt allein von der Konfiguration des Panels ab:
 Jeder Busteilnehmer (`D11`, `D12`, …) wird automatisch erkannt, sein Typ
 (z. B. `EM330`, `EM340`, `MRTP_XX`) aus der Gerätekonfiguration gelesen.
 
+## Geräte auswählen und benennen (Seitenleiste)
+
+Nach dem Start erscheint **Husemann2MQTT** in der Seitenleiste von Home
+Assistant. Die Seite zeigt alle gefundenen Geräte je Gateway mit Knoten, Typ,
+Seriennummer, Status und Anzahl der Messwerte.
+
+1. Haken bei den Geräten setzen, die in Home Assistant erscheinen sollen.
+2. Optional einen Namen vergeben (leer = Standardname wie `EM340 D15 (Gateway 1)`).
+3. **Speichern**. Das Add-on legt die Geräte innerhalb weniger Sekunden per
+   MQTT-Discovery an – mit dem vergebenen Namen. Abgehakte Geräte werden samt
+   Entitäten aus Home Assistant entfernt.
+
+Die Auswahl liegt in `/data/devices.json` des Add-ons und überlebt Neustarts
+und Updates. Geräte, die nicht mehr am Bus gefunden werden, lassen sich über
+**Vergessen** aus Liste und Home Assistant entfernen.
+
+Die Entity-IDs (`sensor.husemann_gateway_1_d11_…`) bleiben beim Umbenennen
+stabil, Verläufe und Dashboards gehen nicht verloren. Wurde ein Gerät bereits
+manuell in Home Assistant umbenannt, hat dieser Name dort Vorrang.
+
 ## Optionen
 
 ### `gateways` (Liste, Pflicht)
@@ -51,9 +71,20 @@ Präfix der State-Topics: `husemann/<gateway>/<device>/<punkt>`.
 
 Muss zum Discovery-Präfix der MQTT-Integration passen.
 
+### `auto_enable_new_devices` (Standard `false`)
+
+`false`: Neu gefundene Geräte erscheinen erst in Home Assistant, wenn sie in
+der Seitenleiste angehakt wurden (empfohlen, wenn man nur einen Teil der
+Zähler braucht oder erst Namen vergeben will).
+
+`true`: Neu gefundene Geräte werden sofort publiziert, sofern
+`include_devices`/`exclude_devices` sie zulassen. Die Auswahl lässt sich
+danach jederzeit in der Seitenleiste ändern.
+
 ### `include_devices` / `exclude_devices` (Listen)
 
-Geräteauswahl. Matcht **Knotenname** (`D11`) oder **Gerätetyp** (`EM340`),
+Vorgabe für **neu gefundene** Geräte bei `auto_enable_new_devices: true`.
+Matcht **Knotenname** (`D11`) oder **Gerätetyp** (`EM340`),
 Groß-/Kleinschreibung egal.
 
 - `include_devices` leer → **alle** Geräte.
@@ -65,10 +96,14 @@ include_devices: ["EM340"]     # nur die EM340-Zähler
 exclude_devices: ["D99"]       # I/O-Modul auslassen
 ```
 
+Bereits bekannte Geräte werden davon nicht mehr berührt; dafür ist die
+Seitenleiste zuständig.
+
 ### `device_names` (Liste, optional)
 
-Eigene Namen für erkannte Geräte, wie sie in Home Assistant angezeigt werden.
-Ohne Eintrag heißt ein Gerät z. B. `EM340 D15 (Gateway 1)`.
+Vorgabe-Namen für **neu gefundene** Geräte, z. B. um eine Konfiguration auf
+eine zweite Instanz zu übertragen. In der Seitenleiste vergebene Namen haben
+Vorrang. Ohne Eintrag heißt ein Gerät z. B. `EM340 D15 (Gateway 1)`.
 
 | Feld | Pflicht | Beschreibung |
 |------|---------|--------------|
@@ -87,11 +122,7 @@ device_names:
     gateway: Gateway 2
 ```
 
-Die Entitäten heißen dann `Hauptzähler Real Power L1 N` usw. Die Entity-IDs
-(`sensor.husemann_gateway_1_d11_…`) bleiben beim Umbenennen stabil, Verläufe
-und Dashboards gehen nicht verloren. Nach einer Änderung das Add-on neu
-starten; Home Assistant übernimmt den neuen Namen automatisch, sofern das
-Gerät nicht bereits manuell in der Oberfläche umbenannt wurde.
+Die Entitäten heißen dann `Hauptzähler Real Power L1 N` usw.
 
 ### `mqtt` (optional)
 
@@ -120,6 +151,7 @@ automatisch den in Home Assistant installierten MQTT-Dienst (z. B. Mosquitto-Add
 - `Input0x`/`SetRelais0x`/`DeviceState` als `binary_sensor`.
 - Energiezähler mit `state_class: total_increasing` (für das HA-Energie-Dashboard).
 - Verfügbarkeit aller Entitäten über `husemann/bridge/status` (LWT).
+- Abgewählte Geräte werden per leerem, retained Discovery-Payload aus HA entfernt.
 
 ## Hinweise
 

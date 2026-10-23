@@ -1,0 +1,20 @@
+# Entwicklungs-Werkzeuge für das gesamte Repo (Add-on + TUI). Das Add-on selbst
+# wird über husemann2mqtt/Dockerfile gebaut, die TUI über tui/pyproject.toml.
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+extend-exclude = ["tui/.venv", ".venv"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "N"]
+ignore = ["N802", "N815"]   # do_GET / do_HEAD sind von http.server vorgegeben
+
+[tool.ruff.lint.isort]
+known-first-party = ["app", "husemann_tui"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["husemann2mqtt", "tui"]
+addopts = "-q"
+asyncio_mode = "auto"

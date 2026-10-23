@@ -1,0 +1,6 @@
+-r husemann2mqtt/requirements.txt
+textual>=0.80
+textual-plotext>=1.0
+pytest>=8
+pytest-asyncio>=0.24
+ruff>=0.6

@@ -5,3 +5,7 @@ venv/
 .DS_Store
 *.log
 *.egg-info/
+.pytest_cache/
+.ruff_cache/
+options.json
+devices.json

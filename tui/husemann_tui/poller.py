@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import threading
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable
 
 from .client import GatewayConfig, PollResult, TixiClient
 from .store import Store

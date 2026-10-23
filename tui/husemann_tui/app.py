@@ -278,7 +278,7 @@ class HusemannApp(App):
             cells = (pretty_name(point), fmt(raw, point), mn, mx, "" if binary else spark(hist))
             rk = f"{point}"
             if rk in table.rows:
-                for col, val in zip(table.columns, cells):
+                for col, val in zip(table.columns, cells, strict=True):
                     table.update_cell(rk, col, val)
             else:
                 table.add_row(*cells, key=rk)

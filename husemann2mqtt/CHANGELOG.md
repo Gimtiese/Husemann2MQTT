@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.3.0
+
+- Weboberfläche in der HA-Seitenleiste (Ingress): gefundene Geräte mit Typ,
+  Seriennummer und Status ansehen, benennen und per Haken für MQTT auswählen.
+  Änderungen wirken ohne Neustart; abgewählte Geräte werden aus HA entfernt.
+- Auswahl und Namen liegen persistent in `/data/devices.json`.
+- Neue Option `auto_enable_new_devices` (Standard `false`): neue Geräte erst
+  nach Auswahl publizieren. `include_devices`, `exclude_devices` und
+  `device_names` sind jetzt Vorgaben für neu gefundene Geräte.
+
 ## 0.2.0
 
 - Neue Option `device_names`: erkannte Geräte bekommen in Home Assistant eigene

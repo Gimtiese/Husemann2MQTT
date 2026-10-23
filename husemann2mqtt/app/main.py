@@ -1,4 +1,4 @@
-"""Einstiegspunkt: Optionen laden, Gateways pollen, nach MQTT publizieren."""
+"""Einstiegspunkt: Optionen laden, Gateways pollen, nach MQTT publizieren, Weboberfläche anbieten."""
 
 from __future__ import annotations
 
@@ -10,9 +10,13 @@ import sys
 import time
 
 from .mqtt_bridge import MqttBridge
+from .registry import Defaults, Registry
 from .tixi import TixiGateway
+from .web import WebServer
 
-OPTIONS_PATH = "/data/options.json"
+OPTIONS_PATH = os.environ.get("H2M_OPTIONS", "/data/options.json")
+REGISTRY_PATH = os.environ.get("H2M_REGISTRY", "/data/devices.json")
+WEB_PORT = int(os.environ.get("H2M_WEB_PORT", "8099"))
 
 _LOG_LEVELS = {
     "trace": logging.DEBUG, "debug": logging.DEBUG, "info": logging.INFO,
@@ -28,17 +32,18 @@ def _handle_signal(signum, frame):  # noqa: ARG001
     _running = False
 
 
-def load_options() -> dict:
+def load_options(path: str = OPTIONS_PATH) -> dict:
     try:
-        with open(OPTIONS_PATH, encoding="utf-8") as fh:
+        with open(path, encoding="utf-8") as fh:
             return json.load(fh)
     except (OSError, json.JSONDecodeError) as err:
         logging.getLogger(__name__).error("Optionen nicht lesbar (%s) – Standardwerte.", err)
         return {}
 
 
-def resolve_mqtt(options: dict) -> dict | None:
+def resolve_mqtt(options: dict, env: dict | None = None) -> dict | None:
     """Externe `mqtt`-Optionen haben Vorrang; sonst HA-Dienst (ENV aus run.sh)."""
+    env = os.environ if env is None else env
     ext = options.get("mqtt") or {}
     base = {
         "base_topic": options.get("base_topic", "husemann"),
@@ -51,26 +56,54 @@ def resolve_mqtt(options: dict) -> dict | None:
             "username": ext.get("username", ""), "password": ext.get("password", ""),
             "tls": ext.get("tls", False),
         }
-    if os.environ.get("HA_MQTT_HOST"):
+    if env.get("HA_MQTT_HOST"):
         return {
             **base,
-            "host": os.environ["HA_MQTT_HOST"],
-            "port": int(os.environ.get("HA_MQTT_PORT", "1883") or 1883),
-            "username": os.environ.get("HA_MQTT_USER", ""),
-            "password": os.environ.get("HA_MQTT_PASSWORD", ""),
-            "tls": str(os.environ.get("HA_MQTT_SSL", "")).lower() in ("true", "1"),
+            "host": env["HA_MQTT_HOST"],
+            "port": int(env.get("HA_MQTT_PORT", "1883") or 1883),
+            "username": env.get("HA_MQTT_USER", ""),
+            "password": env.get("HA_MQTT_PASSWORD", ""),
+            "tls": str(env.get("HA_MQTT_SSL", "")).lower() in ("true", "1"),
         }
     return None
 
 
-def device_allowed(node: str, model: str, include: list[str], exclude: list[str]) -> bool:
-    """include (falls gesetzt) = Whitelist; exclude = Blacklist. Matcht Node ODER Modell."""
-    tags = {node.lower(), model.lower()}
-    if exclude and tags & {e.lower() for e in exclude}:
-        return False
-    if include:
-        return bool(tags & {i.lower() for i in include})
-    return True
+def defaults_from_options(options: dict) -> Defaults:
+    return Defaults(
+        auto_enable=bool(options.get("auto_enable_new_devices", False)),
+        include=list(options.get("include_devices") or []),
+        exclude=list(options.get("exclude_devices") or []),
+        names=list(options.get("device_names") or []),
+    )
+
+
+def apply_changes(registry: Registry, bridge: MqttBridge) -> None:
+    """Änderungen aus der Weboberfläche auf MQTT anwenden (vor dem nächsten Publizieren)."""
+    for action, entry in registry.drain_changes():
+        if action == "remove":
+            bridge.remove_device(entry)
+        else:
+            bridge.forget_device(entry)      # Discovery wird im Zyklus mit neuem Namen neu gesendet
+
+
+def poll_cycle(gateways: list[TixiGateway], registry: Registry, bridge: MqttBridge,
+               log: logging.Logger, announced: set[str]) -> None:
+    for gw in gateways:
+        devices = gw.read_process()
+        registry.observe_gateway(gw.name, gw.host, bool(devices), gw.last_latency_ms, len(devices),
+                                 "" if devices else "keine Antwort")
+        published = points = 0
+        for entry in registry.observe_devices(gw.name, devices):
+            if not entry.enabled:
+                continue
+            points += bridge.publish_device(gw.name, devices[entry.node], entry.display_name)
+            published += 1
+        bridge.publish_gateway(gw.name, gw.host, bool(devices), gw.last_latency_ms, published)
+        if devices:
+            log.log(logging.DEBUG if gw.name in announced else logging.INFO,
+                    "Gateway %s: %d Geräte gefunden, %d publiziert (%d Datenpunkte)",
+                    gw.name, len(devices), published, points)
+            announced.add(gw.name)
 
 
 def main() -> int:
@@ -89,8 +122,6 @@ def main() -> int:
 
     poll_interval = int(options.get("poll_interval", 10))
     timeout = int(options.get("request_timeout", 8))
-    include = options.get("include_devices") or []
-    exclude = options.get("exclude_devices") or []
 
     gateways = [
         TixiGateway(gw.get("name", gw["host"]), gw["host"], gw.get("port", 8080), timeout)
@@ -103,41 +134,43 @@ def main() -> int:
     for gw in gateways:
         gw.load_models()
 
-    bridge = MqttBridge(mqtt_cfg, options.get("device_names") or [])
+    registry = Registry(REGISTRY_PATH, defaults_from_options(options))
+
+    bridge = MqttBridge(mqtt_cfg)
     try:
         bridge.connect()
     except Exception as err:  # noqa: BLE001
         log.error("MQTT-Verbindung fehlgeschlagen: %s", err)
         return 1
 
+    web = WebServer(registry, WEB_PORT, allow_any_client=os.environ.get("H2M_ALLOW_ANY_CLIENT") == "1")
+    try:
+        web.start()
+    except OSError as err:
+        log.error("Weboberfläche konnte nicht starten (Port %d): %s", WEB_PORT, err)
+        bridge.disconnect()
+        return 1
+
     log.info("Starte Polling: %d Gateway(s), Intervall %ds", len(gateways), poll_interval)
-    announced: set[str] = set()      # Gateways, deren erste erfolgreiche Abfrage geloggt wurde
+    if not registry.defaults.auto_enable:
+        log.info("Neue Geräte werden erst nach Auswahl in der Weboberfläche publiziert "
+                 "(Option auto_enable_new_devices).")
+    announced: set[str] = set()
 
     while _running:
         cycle_start = time.monotonic()
-        for gw in gateways:
-            devices = gw.read_process()
-            published = points = 0
-            for node, dev in sorted(devices.items()):
-                if not device_allowed(node, dev.model, include, exclude):
-                    continue
-                points += bridge.publish_device(gw.name, dev)
-                published += 1
-            bridge.publish_gateway(gw.name, gw.host, bool(devices), gw.last_latency_ms, published)
-            if devices:
-                log.log(logging.DEBUG if gw.name in announced else logging.INFO,
-                        "Gateway %s: %d Geräte, %d Datenpunkte publiziert", gw.name, published, points)
-                announced.add(gw.name)
+        apply_changes(registry, bridge)
+        poll_cycle(gateways, registry, bridge, log, announced)
 
-        elapsed = time.monotonic() - cycle_start
-        sleep_for = max(0.0, poll_interval - elapsed)
-        waited = 0.0
-        while _running and waited < sleep_for:
-            step = min(0.5, sleep_for - waited)
-            time.sleep(step)
-            waited += step
+        # Bis zum nächsten Zyklus warten – Änderungen aus der Oberfläche wecken sofort.
+        remaining = poll_interval - (time.monotonic() - cycle_start)
+        while _running and remaining > 0:
+            if registry.changed.wait(min(0.5, remaining)):
+                break
+            remaining = poll_interval - (time.monotonic() - cycle_start)
 
     log.info("Beende …")
+    web.stop()
     bridge.disconnect()
     return 0
 

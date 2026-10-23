@@ -1,5 +1,5 @@
 name: Husemann2MQTT
-version: "0.2.0"
+version: "0.3.0"
 slug: husemann2mqtt
 description: >-
   Liest ein Husemann Smart Panel (Tixi.Gate-Datenlogger) über die TiXML-HTTP-API
@@ -18,8 +18,11 @@ boot: auto
 # automatisch. Externer Broker bleibt über die Option `mqtt` konfigurierbar.
 services:
   - mqtt:want
-map:
-  - addon_config:rw
+# Weboberfläche in der HA-Seitenleiste: gefundene Geräte ansehen, benennen, auswählen.
+ingress: true
+ingress_port: 8099
+panel_icon: mdi:flash
+panel_title: Husemann2MQTT
 options:
   gateways:
     - name: Gateway 1
@@ -29,6 +32,7 @@ options:
   request_timeout: 8
   base_topic: husemann
   discovery_prefix: homeassistant
+  auto_enable_new_devices: false
   include_devices: []
   exclude_devices: []
   device_names: []
@@ -48,6 +52,7 @@ schema:
   request_timeout: int(1,60)
   base_topic: str
   discovery_prefix: str
+  auto_enable_new_devices: bool
   include_devices:
     - str
   exclude_devices:
