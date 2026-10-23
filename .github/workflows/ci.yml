@@ -25,4 +25,4 @@ jobs:
       - uses: actions/checkout@v4
       - uses: home-assistant/builder@master
         with:
-          args: --test --amd64 --target husemann2mqtt
+          args: --test --amd64 --target husemann2mqtt --image husemann2mqtt --docker-hub local
