@@ -4,6 +4,8 @@ Terminal-UI zum Erkunden und Aufzeichnen der Daten eines Husemann Smart Panel
 (Tixi.Gate HE653, TiXML-HTTP-API). **Läuft komplett unabhängig vom HA-Add-on** –
 braucht weder Home Assistant noch MQTT, nur Netzzugriff auf das Gateway.
 
+![Übersicht](../docs/images/tui-uebersicht.png)
+
 ## Installation
 
 ```bash
@@ -31,6 +33,8 @@ Optionen: `-i/--interval` (Sek., Standard 2), `--db`, `--retention-days` (Standa
 | **Übersicht** | Baum Gateway → Geräte; je Gerät alle Datenpunkte live mit Min/Max seit Start und Trend-Sparkline |
 | **Verlauf** | Diagramm aus der Datenbank; Enter in der Übersicht öffnet den Punkt, `p` heftet bis zu 4 Reihen zum Vergleich an, `c` leert. Zwei verschiedene Einheiten bekommen eine linke und eine rechte Achse, Schaltzustände werden als Treppe gezeichnet, Ausfälle des Gateways bleiben als Lücke sichtbar |
 | **Ereignisse** | Schaltzustände (Eingänge/Relais/DeviceState) und Gateway online/offline |
+
+![Verlauf mit zwei Achsen](../docs/images/tui-verlauf.png)
 
 `1`–`6` Zeitraum (5 Min · 1 Std · 6 Std · 24 Std · 7 Tage · 30 Tage), `q` beenden.
 
