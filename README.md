@@ -81,6 +81,7 @@ gateways:
 poll_interval: 10          # Sekunden
 base_topic: husemann
 discovery_prefix: homeassistant
+topic_naming: name          # Topics nach GUI-Name (0.4.0) oder "node" wie bisher
 auto_enable_new_devices: false   # true = neue Geräte sofort publizieren
 include_devices: []        # Vorgabe für neue Geräte; leer = alle, sonst z. B. ["D11","EM340"]
 exclude_devices: []        # z. B. ["D99"]

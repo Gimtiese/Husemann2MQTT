@@ -36,7 +36,10 @@ class MqttBridge:
         self.base_topic = cfg["base_topic"].strip("/")
         self.discovery_prefix = cfg["discovery_prefix"].strip("/")
         self.status_topic = f"{self.base_topic}/bridge/status"
+        # Topic-Segment je Gerät: GUI-Name (Standard) oder Node-ID (Option `topic_naming`).
+        self.topic_naming = str(cfg.get("topic_naming", "name")).lower()
         self._published: set[str] = set()     # unique_ids mit bereits gesendeter Discovery
+        self._segments: dict[str, dict[str, str]] = {}   # gateway -> node -> Topic-Segment
 
         self._client = mqtt.Client(
             callback_api_version=mqtt.CallbackAPIVersion.VERSION2,
@@ -84,8 +87,30 @@ class MqttBridge:
     def _discovery_topic(self, component: str, unique_id: str) -> str:
         return f"{self.discovery_prefix}/{component}/{unique_id}/config"
 
-    def _state_topic(self, gw_name: str, node: str, point: str) -> str:
-        return f"{self.base_topic}/{slug(gw_name)}/{slug(node)}/{point}"
+    def _state_topic(self, gw_name: str, segment: str, point: str) -> str:
+        return f"{self.base_topic}/{slug(gw_name)}/{segment}/{point}"
+
+    def _node_segment(self, gw_name: str, node: str, topic_name: str) -> str:
+        """Topic-Segment eines Geräts: GUI-Name (slug), Fallback Node-ID.
+
+        Vergibt pro Gateway eindeutige Segmente: Kollidiert der Name mit dem
+        Segment eines anderen Geräts, weicht das Gerät auf die Node-ID aus.
+        `unique_id`/`object_id`/`device.identifiers` bleiben davon unberührt.
+        """
+        segments = self._segments.setdefault(gw_name, {})
+        taken = {seg for n, seg in segments.items() if n != node}
+        wanted = slug(topic_name) if self.topic_naming == "name" and topic_name else ""
+        candidates = [c for c in (wanted, slug(node),
+                                   f"{slug(node)}_{wanted or 'device'}") if c]
+        for cand in candidates:
+            if cand not in taken:
+                segments[node] = cand
+                return cand
+        i = 2
+        while f"{slug(node)}_{i}" in taken:
+            i += 1
+        segments[node] = f"{slug(node)}_{i}"
+        return segments[node]
 
     # ------------------------------------------------------------------ Geräteblöcke
     def _gateway_block(self, gw_name: str, host: str) -> dict:
@@ -113,7 +138,8 @@ class MqttBridge:
         return block
 
     # ------------------------------------------------------------------ Discovery
-    def _publish_discovery(self, gw_name: str, dev: Device, name: str, point: str, meta: PointMeta) -> None:
+    def _publish_discovery(self, gw_name: str, dev: Device, name: str, segment: str,
+                           point: str, meta: PointMeta) -> None:
         unique_id = self._unique_id(gw_name, dev.node, point)
         if unique_id in self._published:
             return
@@ -122,7 +148,7 @@ class MqttBridge:
             "has_entity_name": True,          # Anzeigename = "<Gerätename> <Punkt>"
             "unique_id": unique_id,
             "object_id": unique_id,           # entity_id bleibt stabil, auch wenn umbenannt wird
-            "state_topic": self._state_topic(gw_name, dev.node, point),
+            "state_topic": self._state_topic(gw_name, segment, point),
             "availability_topic": self.status_topic,
             "device": self._device_block(gw_name, dev, name),
         }
@@ -145,12 +171,17 @@ class MqttBridge:
         self._published.add(unique_id)
         _LOGGER.debug("Discovery: %s", topic)
 
-    def publish_device(self, gw_name: str, dev: Device, name: str) -> int:
-        """Discovery (einmalig) + aktuelle Werte für ein Gerät. Gibt Anzahl Punkte zurück."""
+    def publish_device(self, gw_name: str, dev: Device, name: str, topic_name: str = "") -> int:
+        """Discovery (einmalig) + aktuelle Werte für ein Gerät. Gibt Anzahl Punkte zurück.
+
+        `topic_name` ist der in der Oberfläche vergebene Name; er bestimmt das
+        State-Topic (leer = Node-ID). `name` ist der Anzeiname in HA.
+        """
+        segment = self._node_segment(gw_name, dev.node, topic_name)
         count = 0
         for point, value in dev.values.items():
-            self._publish_discovery(gw_name, dev, name, point, meta_for(point))
-            self._client.publish(self._state_topic(gw_name, dev.node, point), value, qos=0, retain=False)
+            self._publish_discovery(gw_name, dev, name, segment, point, meta_for(point))
+            self._client.publish(self._state_topic(gw_name, segment, point), value, qos=0, retain=False)
             count += 1
         return count
 
@@ -158,6 +189,7 @@ class MqttBridge:
         """Vergisst die gesendete Discovery, sodass sie (z. B. mit neuem Namen) erneut gesendet wird."""
         prefix = self._device_id(entry.gateway, entry.node) + "_"
         self._published = {u for u in self._published if not u.startswith(prefix)}
+        self._segments.get(entry.gateway, {}).pop(entry.node, None)
 
     def remove_device(self, entry: Entry) -> int:
         """Entfernt alle Entitäten eines Geräts aus HA (leere, retained Discovery-Payloads)."""
@@ -168,6 +200,7 @@ class MqttBridge:
             self._client.publish(topic, "", qos=1, retain=True)
             self._published.discard(unique_id)
             count += 1
+        self._segments.get(entry.gateway, {}).pop(entry.node, None)
         _LOGGER.info("Gerät %s %s aus Home Assistant entfernt (%d Entitäten)",
                      entry.gateway, entry.node, count)
         return count

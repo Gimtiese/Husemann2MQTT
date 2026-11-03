@@ -48,6 +48,7 @@ def resolve_mqtt(options: dict, env: dict | None = None) -> dict | None:
     base = {
         "base_topic": options.get("base_topic", "husemann"),
         "discovery_prefix": options.get("discovery_prefix", "homeassistant"),
+        "topic_naming": options.get("topic_naming", "name"),
     }
     if ext.get("host"):
         return {
@@ -96,7 +97,8 @@ def poll_cycle(gateways: list[TixiGateway], registry: Registry, bridge: MqttBrid
         for entry in registry.observe_devices(gw.name, devices):
             if not entry.enabled:
                 continue
-            points += bridge.publish_device(gw.name, devices[entry.node], entry.display_name)
+            points += bridge.publish_device(gw.name, devices[entry.node], entry.display_name,
+                                            topic_name=entry.name)
             published += 1
         bridge.publish_gateway(gw.name, gw.host, bool(devices), gw.last_latency_ms, published)
         if devices:

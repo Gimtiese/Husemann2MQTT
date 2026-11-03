@@ -1,3 +1,3 @@
 """Husemann2MQTT – TiXML (Tixi.Gate HE653) → MQTT-Discovery-Bridge."""
 
-__version__ = "0.3.1"
+__version__ = "0.4.0"
