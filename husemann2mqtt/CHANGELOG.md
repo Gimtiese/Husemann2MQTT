@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.4.0
+
+- **Geänderte State-Topics:** Geräte mit eigenem Namen liegen jetzt unter
+  `husemann/<gateway>/<Gerätename>/<Punkt>` statt `husemann/<gateway>/<Node-ID>/<Punkt>`
+  (Namen slugifiziert; ohne Namen weiterhin die Node-ID).
+- **Upgrade-Hinweis:** Home Assistant braucht nichts – `unique_id`, `object_id`
+  und `device.identifiers` hängen weiterhin an der Node-ID, die Discovery wird beim
+  Start mit dem neuen `state_topic` neu gesendet. Entitäten, Historie und
+  Zuordnung bleiben erhalten. **Externe Konsumenten** der alten Topics
+  (Node-RED, MQTT-Trigger) müssen auf die neuen Topics umstellen oder die neue
+  Option `topic_naming: node` setzen, dann bleibt alles beim Alten.
+- Umbenennen in der Oberfläche sendet die Discovery sofort mit dem neuen Topic neu.
+- Namenskollisionen: Zwei Geräte mit gleichem Namen auf einem Gateway bekommen
+  keine gemeinsamen Topics (Ausweichen auf die Node-ID).
+- Neue Option `topic_naming` (`name`, Standard | `node`): Topics nach GUI-Name
+  oder – wie bisher – nach Node-ID.
+
 ## 0.3.1
 
 - Seitenleiste zeigt je Gerät die aktuellen Messwerte: Kurzfassung (Leistung,

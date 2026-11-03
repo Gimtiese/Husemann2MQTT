@@ -51,6 +51,9 @@ def test_poll_cycle_publishes_only_enabled(tmp_path, gateway, bridge, mqtt):
     poll_cycle([gateway], reg, bridge, log, set())
     cfg = mqtt.configs()["homeassistant/sensor/husemann_gateway_1_d11_frequency/config"]
     assert cfg["device"]["name"] == "Zähler Nord"
+    assert cfg["unique_id"] == "husemann_gateway_1_d11_frequency"     # Zuordnung bleibt stabil
+    assert cfg["state_topic"] == "husemann/gateway_1/zähler_nord/Frequency"
+    assert ("husemann/gateway_1/zähler_nord/Frequency", "49.9") in mqtt.states()
 
     # Abwählen -> Entitäten werden entfernt, keine States mehr
     reg.update([{"key": device_key("Gateway 1", "D11"), "enabled": False}])

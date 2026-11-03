@@ -68,7 +68,20 @@ HTTP-Timeout je Anfrage.
 
 ### `base_topic` (Standard `husemann`)
 
-Präfix der State-Topics: `husemann/<gateway>/<device>/<punkt>`.
+Präfix der State-Topics: `husemann/<gateway>/<device>/<punkt>`. `<device>` ist
+seit 0.4.0 der in der Seitenleiste vergebene Name (slugifiziert), solange kein
+Name gesetzt ist die Node-ID.
+
+### `topic_naming` (`name`, Standard | `node`)
+
+`name`: State-Topics verwenden den GUI-Namen des Geräts, Fallback Node-ID.
+`node`: Topics bleiben wie vor 0.4.0 an der Node-ID – für externe Konsumenten
+(Node-RED, MQTT-Trigger), die auf die alten Topics hören.
+
+Beim Wechsel der Topics bleibt die Zuordnung in Home Assistant erhalten:
+`unique_id`, `object_id` und `device.identifiers` hängen unverändert an der
+Node-ID, nur das `state_topic` der Discovery ändert sich und wird beim Start
+neu (retained) gesendet.
 
 ### `discovery_prefix` (Standard `homeassistant`)
 
