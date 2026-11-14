@@ -2,5 +2,5 @@
 textual>=0.80
 textual-plotext>=1.0
 pytest>=8
-pytest-asyncio>=0.24
+pytest-asyncio>=1.4.1.post1
 ruff>=0.6
