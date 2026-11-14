@@ -1,6 +1,6 @@
 -r husemann2mqtt/requirements.txt
 textual>=8.2.8
-textual-plotext>=1.0
+textual-plotext>=1.0.1
 pytest>=8
 pytest-asyncio>=1.4.1.post1
 ruff>=0.6
